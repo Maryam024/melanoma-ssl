@@ -1,0 +1,15 @@
+# Model checkpoints — too large for a normal git repo
+*.pt
+
+# Dataset files — download from Zenodo instead, see README
+*.zip
+*.tif
+*.geojson
+images/
+annotations/
+puma/
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/

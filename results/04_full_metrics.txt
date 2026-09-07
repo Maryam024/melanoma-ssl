@@ -1,0 +1,10 @@
+Experiment: Full metrics on baseline model (41 held-out validation images)
+
+Dice / F1:        0.9038
+IoU / Jaccard:     0.8257
+Precision:         0.8822
+Recall:            0.9290
+Pixel Accuracy:    0.9541
+
+Reference (Akbarpour et al. 2025, private dataset, with TTA + ensembling):
+Dice ~0.916, Jaccard ~0.83

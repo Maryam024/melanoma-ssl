@@ -1,0 +1,32 @@
+Experiment: Mean Teacher SSL with real out-of-domain unlabeled data (TCGA-SKCM)
+Data: 15 labeled PUMA / 320 unlabeled TCGA-SKCM patches (8 slides, 100% tissue-yield) / 25 held-out PUMA val
+Config: 60 epochs, batch_size=2, lr=5e-5, EMA decay=0.99, consistency rampup=10 epochs
+Consistency-branch augmentation: strong (affine warp ±30 deg rotation + ±10% translation,
+  brightness/contrast jitter ±40%, gaussian noise std=0.08) — same augmentation as result 07.
+
+Epoch 1/60 | val_dice=0.4572
+Epoch 10/60 | val_dice=0.7707
+Epoch 20/60 | val_dice=0.8097
+Epoch 30/60 | val_dice=0.8049
+Epoch 40/60 | val_dice=0.8134
+Epoch 50/60 | val_dice=0.8182
+Epoch 53/60 | val_dice=0.8454   <- best checkpoint (ssl_tcga_student_best.pt)
+Epoch 60/60 | val_dice=0.8436
+
+RESULT: Best val_dice = 0.8454
+
+Comparison (same 15-labeled split, same strong augmentation, only unlabeled source differs):
+  Mean Teacher, in-domain PUMA unlabeled (same aug):      0.8323  (see 07)
+  Mean Teacher, out-of-domain TCGA unlabeled (this run):  0.8454
+
+CONCLUSION: With augmentation strength held constant, using genuinely out-of-domain
+unlabeled data (TCGA-SKCM, different scanner/institution) outperformed same-distribution
+PUMA unlabeled data by ~1.3 points. This supports the domain-diversity hypothesis proposed
+after the initial in-domain SSL experiments. However, this result is still below the
+supervised-only baseline (0.8702), so out-of-domain data narrows but does not close the gap
+for Mean Teacher specifically.
+
+Caveat: TCGA patches were extracted without confirming their microns-per-pixel matches
+PUMA's 40x scans; if base magnification differs, nuclei may appear at a different apparent
+scale in TCGA patches, which could be an additional confound alongside genuine staining/
+scanner domain diversity. Not corrected for in this run.

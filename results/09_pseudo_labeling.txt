@@ -1,0 +1,23 @@
+Experiment: Confidence-thresholded pseudo-labeling (self-training), the simplest standard SSL
+baseline. Two-stage: (1) train on labeled data only, (2) generate pseudo-masks on unlabeled
+data, keep only images where >=80% of pixels exceed a 0.9 confidence threshold, retrain on
+labeled + kept pseudo-labeled data combined.
+Data: 15 labeled / 165 unlabeled / 25 held-out val.
+Config: Stage 1 = 40 epochs labeled-only. Confidence threshold = 0.9 (pixel-level),
+  image kept if >=80% of its pixels are confident.
+
+Stage 1 (labeled-only) done.
+Kept 0 / 165 unlabeled images as confident pseudo-labels.
+Stage 2 not run (no pseudo-labeled data available).
+
+RESULT: No usable result — 0 unlabeled images passed the confidence filter.
+
+CONCLUSION: At 15 labeled images, the Stage-1 model is not confident enough (per-pixel) across
+enough of any unlabeled image to pass the threshold. Confidence-thresholded self-training
+assumes a baseline level of model reliability to bootstrap from; that assumption does not hold
+at this label count. This is treated as a genuine negative result, not a bug — lowering the
+confidence threshold to force pseudo-labels through was deliberately not done, since accepting
+low-confidence self-generated labels risks reinforcing the model's own errors rather than
+providing new information. Pseudo-labeling was not re-tested at 40 labeled images; based on the
+Stage-1 confidence pattern here, it is plausible it would still under-produce confident labels,
+though this was not directly verified.

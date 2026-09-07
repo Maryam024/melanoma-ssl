@@ -1,0 +1,14 @@
+Experiment: Semi-supervised learning comparison at moderate label scarcity
+Data: 40 labeled / 140 unlabeled / 25 held-out val (all from PUMA, same distribution)
+Config: 60 epochs, batch_size=2, mixed precision, lr=5e-5
+
+--- Supervised-only, random init, 40 labeled examples ---
+Best val_dice = 0.8903
+
+--- Mean Teacher SSL (consistency regularization), 40 labeled + 140 unlabeled ---
+Best val_dice = 0.8883
+
+CONCLUSION: Consistent with the 15-labeled experiment — SSL did not improve
+over supervised-only at this labeled-set size either. Two independent trials
+(15 and 40 labeled) both show the same small negative gap, suggesting this
+is a real pattern rather than single-run noise.

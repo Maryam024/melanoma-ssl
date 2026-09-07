@@ -1,0 +1,29 @@
+Experiment: Full baseline (205 images) with data augmentation, then TTA
+Augmentation: random flips, 90/180/270 rotation, brightness/contrast jitter
+Config: 40 epochs, batch_size=2, lr=1e-4
+
+Epoch 1/40 | loss=0.9358 | val_dice=0.8238
+Epoch 5/40 | loss=0.5862 | val_dice=0.8789
+Epoch 10/40 | loss=0.4284 | val_dice=0.8913
+Epoch 15/40 | loss=0.3532 | val_dice=0.8994
+Epoch 20/40 | loss=0.3148 | val_dice=0.9050
+Epoch 25/40 | loss=0.2881 | val_dice=0.9074
+Epoch 27/40 | loss=0.2753 | val_dice=0.9093   <- best checkpoint saved here
+Epoch 30/40 | loss=0.2760 | val_dice=0.9079
+Epoch 31/40 | loss=0.2715 | val_dice=0.9048
+Epoch 32/40 | loss=0.2811 | val_dice=0.3971   <- training instability (loss spike), recovers partially but never returns to peak
+...
+Epoch 40/40 | loss=0.9359 | val_dice=0.6462
+
+RESULT: Best val_dice (augmentation) = 0.9093, saved at epoch 27 (best-checkpoint
+saving means the later instability does not affect the final saved model).
+
+Follow-up: Test-time augmentation (TTA) on the best checkpoint
+Dice with augmentation + TTA: 0.9072 (no additional gain over 0.9093 alone —
+model had already learned flip/rotation invariance during training, so TTA
+had nothing new to contribute)
+
+=== FINAL SUMMARY ===
+Original baseline (no augmentation):        0.9038
++ Data augmentation (best result):          0.9093
++ TTA on top of augmented model:            0.9072 (no further improvement)

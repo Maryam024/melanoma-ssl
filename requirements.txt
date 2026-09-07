@@ -1,0 +1,8 @@
+torch>=2.0
+torchvision
+numpy
+pillow
+geojson
+shapely
+openslide-python
+requests

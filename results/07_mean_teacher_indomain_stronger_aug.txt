@@ -1,0 +1,34 @@
+Experiment: Mean Teacher SSL, in-domain PUMA unlabeled data, with STRONGER consistency-branch
+augmentation (affine warp + wider jitter), re-run for fair comparison against result 06.
+Data: 15 labeled / 165 unlabeled (both PUMA) / 25 held-out val — same split as original run.
+Config: 60 epochs, batch_size=2, lr=5e-5, EMA decay=0.99.
+Consistency-branch augmentation: affine warp (±30 deg rotation, ±10% translation via
+  grid_sample), brightness/contrast jitter ±40%, gaussian noise std=0.08.
+  (Original run used mild brightness/contrast ±20% + noise std=0.05, no spatial warp.)
+
+Epoch 1/60  | val_dice=0.4317
+Epoch 10/60 | val_dice=0.7684
+Epoch 20/60 | val_dice=0.8224
+Epoch 30/60 | val_dice=0.8072
+Epoch 40/60 | val_dice=0.8197
+Epoch 43/60 | val_dice=0.8323   <- best checkpoint (ssl_indomain_newaug_best.pt)
+Epoch 50/60 | val_dice=0.8177
+Epoch 60/60 | val_dice=0.7940
+
+RESULT: Best val_dice = 0.8323
+
+Comparison (15 labeled, in-domain PUMA unlabeled, isolating augmentation strength only):
+  Mild augmentation (original run):    0.8661
+  Strong augmentation (this run):      0.8323
+
+CONCLUSION: Strengthening the consistency-branch augmentation made in-domain Mean Teacher
+WORSE, not better. Training was visibly rockier from epoch 1 and never converged as smoothly
+as the mild-augmentation run. Most likely explanation: with only 15 labeled anchors, demanding
+consistency under a ±30-degree rotation + wide color jitter is too aggressive a transform for
+the model to learn to be invariant to reliably at this label count — the strong perturbation
+adds more instability than useful signal. This is the opposite of what was intended (the change
+was meant to give consistency regularization "more to be robust against"); instead it mostly
+made the consistency target harder to hit correctly. Combined with result 06, this shows
+augmentation strength and unlabeled-data domain have independent, sometimes opposing effects
+on Mean Teacher SSL performance — conflating them in a single before/after comparison would
+have been misleading.

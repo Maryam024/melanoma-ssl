@@ -1,0 +1,37 @@
+Experiment: Semi-supervised learning comparison at extreme label scarcity
+Data: 15 labeled / 165 unlabeled / 25 held-out val (all from PUMA, same distribution)
+Config: 60 epochs, batch_size=2, mixed precision, lr=5e-5 (fine-tuning stage)
+
+--- (a) Supervised-only, random init, 15 labeled examples ---
+Final epochs converge to best val_dice = 0.8702
+
+--- (b) Mean Teacher SSL (consistency regularization), 15 labeled + 165 unlabeled ---
+Student trained with supervised loss (15 labeled) + consistency loss vs.
+EMA teacher (165 unlabeled, color-jitter + noise as student-side augmentation)
+Best val_dice = 0.8661
+
+--- (c) Autoencoder-pretrained encoder, single learning rate (5e-5) for full model ---
+Encoder pretrained via image reconstruction on all 180 images (15+165, no masks),
+then transplanted into segmentation UNet, fine-tuned on 15 labeled examples only.
+Best val_dice = 0.7692
+
+--- (d) Autoencoder-pretrained encoder, DIFFERENTIAL learning rates ---
+Same pretrained encoder as (c), but fine-tuned with encoder_lr=1e-5 (gentle)
+and decoder_lr=3e-4 (fast, since decoder started randomly initialized).
+Best val_dice = 0.8521
+
+=== SUMMARY (15 labeled examples) ===
+Supervised-only, random init:               0.8702  (best)
+Autoencoder-pretrained, differential lr:    0.8521
+Mean Teacher SSL (consistency):             0.8661
+Autoencoder-pretrained, single lr:          0.7692  (worst)
+
+CONCLUSION: Neither SSL method tested improved over plain supervised training
+in this setup. The autoencoder's initial underperformance was substantially
+(not fully) explained by a fine-tuning learning-rate mismatch between the
+pretrained encoder and randomly-initialized decoder. Most likely root cause:
+the unlabeled pool is drawn from the same distribution as the labeled data
+(same dataset, scanner, staining), giving consistency- and reconstruction-based
+methods little genuinely new information to exploit. Real domain diversity
+(e.g. out-of-institution unlabeled WSIs) is hypothesized to be necessary for
+these methods to show benefit — proposed as next step.
