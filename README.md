@@ -1,124 +1,328 @@
 # Semi-Supervised Melanoma Nuclei Segmentation
 
-Exploring semi-supervised learning for melanoma detection in H&E-stained histopathological images — preparatory work ahead of a MITACS Globalink application, aligned with Dr. Mrinal Mandal's (University of Alberta) project on melanoma CAD via nuclei segmentation and semi-supervised learning.
+A research study investigating whether **semi-supervised learning (SSL) can improve nuclei segmentation in melanoma histopathology when only a small number of expert-labeled images are available**.
 
-## Motivation
+The project evaluates multiple SSL strategies on H&E-stained melanoma tissue and compares them against carefully matched supervised baselines. The study focuses not only on performance improvements, but also on understanding **when SSL helps, when it fails, and why**.
 
-Medical image labeling is expensive, and most real-world histopathology data is unlabeled or coarsely labeled. This project asks a concrete question: **given only a small labeled set, can semi-supervised learning (SSL) meaningfully improve nuclei segmentation by also using unlabeled images?** Four distinct SSL mechanisms — Mean Teacher (consistency regularization), a semi-supervised GAN (adversarial), autoencoder pretraining (reconstruction), and confidence-thresholded pseudo-labeling (self-training) — are tested and compared honestly against a supervised-only baseline, at two label-scarcity levels (15 and 40 labeled images), including negative results and their diagnosis.
+The work is motivated by research on computer-aided melanoma analysis based on nuclei segmentation, including work by **Akbarpour et al. (2025)** and related research from the University of Alberta.
 
-## Related work this builds on
+---
 
-- Akbarpour et al. (2025), *Deep Learning-Based Nuclei Segmentation and Melanoma Detection...* — the direct reference paper for this project (Dr. Mandal's group), reporting ~91.6% Dice on their private dataset.
-- Alheejawi et al. (2021) — earlier foundation of the same nuclei-segmentation → melanoma-region pipeline.
-- Yu et al. (2021), *Accurate recognition of colorectal cancer with semi-supervised deep learning...* — source of the Mean Teacher method adapted here.
-- Hung et al. (2018), *Adversarial Learning for Semi-Supervised Semantic Segmentation* — source of the GAN-based SSL method adapted here.
-- Requa et al. (2023) — multi-stage supervised/semi-supervised skin-neoplasm detection, motivating the labeled/coarsely-labeled/unlabeled framing.
+## Research Question
+
+Expert annotation of histopathological images is expensive and time-consuming, while large collections of medical images may remain unlabeled.
+
+This project investigates:
+
+> **Can unlabeled histopathology images provide useful training signal for nuclei segmentation when only a small labeled set is available?**
+
+Four different SSL mechanisms were implemented and evaluated:
+
+* **Mean Teacher** — consistency regularization
+* **GAN-based SSL** — adversarial learning
+* **Autoencoder pretraining** — unsupervised representation learning
+* **Pseudo-labeling** — confidence-based self-training
+
+Each method was compared against a **supervised-only baseline using the same labeled subset**.
+
+---
 
 ## Dataset
 
-[PUMA — Panoptic segmentation of nUclei and tissue in MelanomA](https://puma.grand-challenge.org/dataset/) (GigaScience, 2025). 103 primary + 103 metastatic melanoma H&E ROIs (1024×1024, 40× magnification) with expert nuclei annotations. **Not included in this repo** — download directly from the [Zenodo record](https://zenodo.org/records/14869398) (`01_training_dataset_tif_ROIs.zip` + `01_training_dataset_geojson_nuclei.zip`).
+The primary experiments use the public **PUMA (Panoptic segmentation of nUclei and tissue in MelanomA)** dataset.
 
-This is a public stand-in for the lab's actual clinical dataset — useful for validating methodology, but not identical in scanner, staining protocol, or patient population. Results here should be read as evidence about the *methods*, not final numbers for the real target dataset.
+* 205 melanoma H&E regions of interest
+* 103 primary melanoma ROIs
+* 103 metastatic melanoma ROIs
+* 1024 × 1024 resolution
+* 40× magnification
+* Expert nuclei annotations
 
-The out-of-domain extension additionally uses real TCGA-SKCM whole-slide images, downloaded via the GDC API (see `code/tcga_download.py`).
+The dataset is **not included in this repository**. It can be obtained from the official [PUMA dataset](https://puma.grand-challenge.org/dataset/) and its [Zenodo record](https://zenodo.org/records/14869398).
 
-## Method
+PUMA serves as a public experimental dataset for validating the methodology. It is not identical to the private clinical datasets used in the target research setting, so the reported results should be interpreted as **methodological evidence rather than expected performance on a clinical dataset**.
 
-1. **Baseline**: fully supervised U-Net, trained on all 205 labeled PUMA ROIs at full 1024×1024 resolution.
-2. **Scarce-label experiments**: subsample to 15 or 40 "labeled" images, treat the rest as "unlabeled" (masks withheld), and compare supervised-only training against four SSL mechanisms:
-   - **Mean Teacher SSL** (Yu et al., 2021): student network trained with a supervised loss on labeled data + a consistency loss (student vs. EMA teacher) on unlabeled data. Tested with both mild and strong consistency-branch augmentation, and with both in-domain (PUMA) and out-of-domain (TCGA-SKCM) unlabeled data.
-   - **GAN-based SSL** (Hung et al., 2018): a discriminator judges (image, mask) pairs as real/fake; the generator (segmentation UNet) gets a supervised loss on labeled data plus a small adversarial loss on both labeled and unlabeled data.
-   - **Autoencoder-pretrained SSL**: encoder pretrained via image reconstruction on all available images (no masks needed), then transplanted into the segmentation model and fine-tuned on the labeled subset — first with a single learning rate, then with differential encoder/decoder learning rates.
-   - **Pseudo-labeling (self-training)**: train on labeled data, generate predictions on unlabeled data, keep only images where the model is highly confident (≥90% of pixels above/below a 0.9 threshold, on ≥80% of the image) as pseudo-labels, retrain on labeled + pseudo-labeled data combined.
+### Out-of-domain extension
 
-## Results
+To investigate whether domain diversity affects SSL, additional unlabeled tissue patches were extracted from **TCGA-SKCM** whole-slide images.
 
-**Full-data supervised baseline** (205 labeled images): **val_dice = 0.9038**
+* 8 TCGA-SKCM whole-slide images
+* 320 tissue patches
+* 1024 × 1024 patches
+* Tissue-content filtering
+* Downloaded through the GDC API
 
-**With data augmentation** (flips, rotations, brightness/contrast jitter): **val_dice = 0.9093** — a genuine improvement from making better use of the same 205 images.
+This extension was designed to test whether **genuinely different unlabeled data** provides a more useful consistency signal than additional images from the same distribution.
 
-**With test-time augmentation on top**: val_dice = 0.9072 — no further gain, since the model had already learned flip/rotation invariance from training augmentation.
+---
 
-**Scarce-label comparison, 15 labeled examples (165 unlabeled, 25 held-out val):**
+## Experimental Design
 
-| Method | val_dice | vs. supervised |
-|---|---|---|
-| Supervised-only, random init | **0.8702** | target |
-| **GAN-SSL (adversarial)** | **0.8693** | **essentially tied (-0.0009)** |
-| Mean Teacher, in-domain PUMA, mild aug | 0.8661 | -0.0041 |
-| Mean Teacher, out-of-domain TCGA, strong aug | 0.8454 | -0.0248 |
-| Autoencoder-pretrained, differential lr | 0.8521 | -0.0181 |
-| Mean Teacher, in-domain PUMA, strong aug | 0.8323 | -0.0379 |
-| Autoencoder-pretrained, single lr | 0.7692 | -0.1010 |
-| Pseudo-labeling (self-training) | n/a | 0 confident pseudo-labels generated — no result |
+### 1. Full-data supervised baseline
 
-**Scarce-label comparison, 40 labeled examples (140 unlabeled, 25 held-out val):**
+A U-Net was trained using all 205 annotated PUMA ROIs.
 
-| Method | val_dice | vs. supervised |
-|---|---|---|
-| Supervised-only, random init | **0.8903** | target |
-| Mean Teacher SSL (consistency) | 0.8883 | -0.0020 |
-| GAN-SSL (adversarial) | 0.8872 | -0.0031 |
+**Best validation Dice: 0.9038**
 
-Full epoch-by-epoch logs for every run are in `results/`.
+Training augmentation improved this to:
 
-## Honest conclusion
+**Dice: 0.9093**
 
-**No SSL method clearly beat supervised-only training in this setup**, but the picture is more nuanced than a flat negative result, and one method came within noise-level distance of the target.
+Test-time augmentation did not provide an additional improvement:
 
-**GAN-SSL is the standout result.** At 15 labeled images, adversarial training reached 0.8693 — a 0.0009 gap from supervised-only, effectively a tie given the ~0.01-0.03 epoch-to-epoch noise visible throughout these runs. This is the one method tested here that is genuinely competitive with fully supervised training under extreme label scarcity.
+**Dice: 0.9072**
 
-**That advantage narrows at 40 labels.** Re-run with 40 labeled images, GAN-SSL (0.8872) fell slightly behind both Mean Teacher (0.8883) and supervised-only (0.8903) — all three within 0.003 of each other, i.e. close to indistinguishable given run-to-run noise. This is consistent with the general expectation for SSL: extra unlabeled data helps most exactly where labeled data is scarcest, and that advantage shrinks as more labels become available.
+This establishes a strong supervised reference before evaluating SSL.
 
-**Mean Teacher's story required isolating two variables.** An initial run (mild consistency-branch augmentation, in-domain PUMA unlabeled data) scored 0.8661, just under supervised. Two follow-up changes were tested independently for a fair comparison: (1) strengthening the consistency-branch augmentation (affine warp + wider jitter) on the *same* in-domain unlabeled data dropped performance to 0.8323 — the stronger perturbation was too aggressive for the model to learn reliable invariance from at only 15 labeled anchors; (2) holding that same stronger augmentation fixed and swapping in real out-of-domain unlabeled data (320 TCGA-SKCM patches from 8 slides, downloaded via the GDC API) raised performance to 0.8454 — better than the same-augmentation in-domain run, supporting the hypothesis that genuine domain diversity gives consistency regularization more real signal to exploit, though still short of the supervised target.
+### 2. Limited-label experiments
 
-**Autoencoder pretraining underperformed most.** The larger initial gap (single learning rate: 0.7692) was substantially — but not fully — explained by a learning-rate mismatch between the pretrained encoder and randomly-initialized decoder; using differential learning rates (gentle for the encoder, fast for the decoder) recovered most but not all of the shortfall (0.8521).
+Two label-scarcity settings were evaluated:
 
-**Pseudo-labeling produced no usable result at 15 labels.** Confidence-thresholded self-training found 0 of 165 unlabeled images confident enough to pass the filter. The Stage-1 model simply isn't reliable enough yet at 15 labels to bootstrap its own training signal — a genuine negative finding about this method's label-count floor, not a bug.
+* **15 labeled images + 165 unlabeled images**
+* **40 labeled images + 140 unlabeled images**
 
-**Overall**: semi-supervised learning's value here is real but narrow — visible only in the best-performing method (GAN-based adversarial training) and only at the most extreme label scarcity tested. Different SSL mechanisms respond differently to the same conditions (stronger augmentation helped nothing tested; domain diversity helped Mean Teacher but wasn't enough to close its gap; adversarial training came closest to parity, and only at the lowest label count). This is evidence that mechanism choice matters more than any single "SSL vs. supervised" verdict would suggest.
+For each setting, a supervised-only model was trained using only the labeled subset. SSL methods then received the same labeled data plus the corresponding unlabeled images.
 
-## TCGA extension (real out-of-domain unlabeled data)
+This design allows the benefit of unlabeled data to be evaluated more directly.
 
-8 TCGA-SKCM slides were downloaded via the GDC API and 320 real tissue patches (1024×1024, tissue-content filtered) were extracted successfully at 100% yield. The training run initially hit a PyTorch/Triton version incompatibility specific to the Kaggle notebook environment (`torch.optim.Adam` triggers an internal `torch._dynamo` import that fails on this image's Triton version); `mean_teacher_tcga.py` includes a monkeypatch at the top of the file that stubs the missing `triton.backends.compiler` module before torch's lazy import reaches it. The run completed successfully after this fix — result above (0.8454), logged in full in `results/06_mean_teacher_tcga_out_of_domain.txt`.
+---
 
-**Known limitation, not yet corrected**: TCGA patches were extracted without confirming their microns-per-pixel matches PUMA's 40x scans. If base magnification differs between the two sources, nuclei could appear at different apparent scales in TCGA patches, which would be an additional confound alongside genuine staining/scanner domain diversity.
+## Methods
 
-## Repository structure
+### Mean Teacher
 
-```
+A student U-Net is trained using:
+
+* supervised segmentation loss on labeled images
+* consistency loss between the student and an EMA teacher on unlabeled images
+
+Two additional factors were investigated:
+
+* strength of consistency-branch augmentation
+* source of unlabeled data (in-domain PUMA vs. out-of-domain TCGA-SKCM)
+
+### GAN-based SSL
+
+Following the adversarial semi-supervised segmentation framework of Hung et al. (2018), a discriminator distinguishes plausible image-mask pairs from generated predictions.
+
+The segmentation network combines supervised segmentation loss with a small adversarial objective.
+
+### Autoencoder Pretraining
+
+The encoder was first pretrained using image reconstruction without requiring segmentation masks.
+
+The pretrained encoder was then transferred to the segmentation network and fine-tuned using the limited labeled set.
+
+Two optimization strategies were tested:
+
+* single learning rate
+* differential learning rates for pretrained encoder and randomly initialized decoder
+
+### Pseudo-labeling
+
+A segmentation model was first trained using the labeled subset.
+
+Predictions on unlabeled images were retained only when they satisfied a high-confidence criterion. The selected pseudo-labels were then used for a second training stage.
+
+At 15 labeled images, the confidence criterion selected **0 of 165 unlabeled images**, preventing a meaningful second-stage experiment.
+
+---
+
+# Results
+
+## 15 labeled images
+
+| Method                                        | Validation Dice |          Difference |
+| --------------------------------------------- | --------------: | ------------------: |
+| **Supervised-only**                           |      **0.8702** |                   — |
+| **GAN-SSL**                                   |      **0.8693** |             -0.0009 |
+| Mean Teacher — in-domain, mild augmentation   |          0.8661 |             -0.0041 |
+| Mean Teacher — TCGA, strong augmentation      |          0.8454 |             -0.0248 |
+| Autoencoder — differential LR                 |          0.8521 |             -0.0181 |
+| Mean Teacher — in-domain, strong augmentation |          0.8323 |             -0.0379 |
+| Autoencoder — single LR                       |          0.7692 |             -0.1010 |
+| Pseudo-labeling                               |             N/A | 0 confident samples |
+
+## 40 labeled images
+
+| Method              | Validation Dice | Difference |
+| ------------------- | --------------: | ---------: |
+| **Supervised-only** |      **0.8903** |          — |
+| Mean Teacher        |          0.8883 |    -0.0020 |
+| GAN-SSL             |          0.8872 |    -0.0031 |
+
+---
+
+# Key Findings
+
+### 1. SSL did not automatically outperform supervised learning
+
+None of the evaluated SSL approaches produced a clear improvement over the matched supervised-only baseline.
+
+This is an important result rather than simply a failure: **the usefulness of unlabeled histopathology data depends strongly on the SSL mechanism, label availability, augmentation strategy, and data distribution.**
+
+### 2. GAN-based SSL was the most competitive under extreme label scarcity
+
+With only **15 labeled images**, GAN-SSL achieved a Dice score of **0.8693**, compared with **0.8702** for supervised-only training.
+
+The difference was only **0.0009**, making adversarial SSL the closest approach to the supervised baseline in this experiment.
+
+At 40 labeled images, however, GAN-SSL no longer provided an advantage:
+
+* Supervised-only: 0.8903
+* Mean Teacher: 0.8883
+* GAN-SSL: 0.8872
+
+This suggests that any potential advantage of SSL may become less pronounced as the number of labeled examples increases.
+
+### 3. Stronger consistency augmentation was not necessarily beneficial
+
+For Mean Teacher with 15 labeled images, increasing the consistency-branch augmentation substantially reduced performance:
+
+* Mild augmentation: **0.8661**
+* Strong augmentation: **0.8323**
+
+With very limited labeled supervision, the stronger perturbation may have made the consistency objective too difficult for the model to satisfy reliably.
+
+### 4. Domain diversity improved Mean Teacher relative to the stronger in-domain setup
+
+Replacing PUMA unlabeled images with **320 TCGA-SKCM tissue patches** increased the Mean Teacher result from:
+
+**0.8323 → 0.8454**
+
+The result remained below the supervised baseline, but the improvement provides evidence that **unlabeled data from a different domain can provide a different and potentially useful consistency signal**.
+
+### 5. Autoencoder pretraining was sensitive to optimization
+
+Autoencoder pretraining initially produced a large performance gap:
+
+**0.7692 Dice**
+
+Using differential learning rates for the pretrained encoder and randomly initialized decoder improved performance to:
+
+**0.8521 Dice**
+
+This suggests that optimization and the mismatch between pretrained and randomly initialized components can substantially influence the effectiveness of unsupervised pretraining.
+
+### 6. Pseudo-labeling reached a label-count limitation
+
+With only 15 labeled images, the initial segmentation model did not produce sufficiently confident predictions under the selected filtering criterion.
+
+As a result, **0/165 unlabeled images** were accepted as pseudo-labels.
+
+Rather than artificially relaxing the threshold to obtain a result, the experiment was recorded as a negative finding. This highlights a practical limitation of self-training when the initial model is too weak to generate reliable pseudo-labels.
+
+---
+
+# Interpretation
+
+The experiments suggest that **semi-supervised learning should not be treated as a universally beneficial replacement for supervised learning** in histopathological segmentation.
+
+The strongest observation was not a large performance gain, but the different behavior of the SSL mechanisms under the same label constraints.
+
+* Adversarial learning remained close to supervised performance at extreme label scarcity.
+* Mean Teacher was sensitive to augmentation strength and data distribution.
+* Out-of-domain unlabeled data improved Mean Teacher relative to a stronger in-domain perturbation setup, although it did not surpass the supervised baseline.
+* Autoencoder pretraining benefited substantially from appropriate optimization.
+* Pseudo-labeling failed to bootstrap effectively at the lowest label count.
+
+These findings motivate further investigation using **larger and genuinely diverse unlabeled clinical datasets**, controlled magnification/scale normalization, stronger experimental replication, and more systematic ablation studies.
+
+---
+
+# Limitations
+
+Several limitations should be considered when interpreting these results.
+
+### Dataset scale
+
+The primary experiments use 205 PUMA ROIs. This is sufficient for controlled experimentation but limited for drawing broad conclusions about clinical deployment.
+
+### Domain mismatch
+
+PUMA and TCGA-SKCM may differ in scanner characteristics, staining, tissue preparation, patient population, and image scale.
+
+### TCGA magnification
+
+The TCGA patches were extracted without explicitly confirming that their microns-per-pixel resolution matched the 40× PUMA images. Differences in apparent nuclear scale therefore remain a potential confounding factor.
+
+### Statistical robustness
+
+The current experiments primarily report validation Dice from individual training runs. Multiple random seeds and statistical testing would strengthen the comparison.
+
+### Public vs. clinical data
+
+PUMA is used as a public methodological proxy. Performance on this dataset should not be interpreted as equivalent to performance on a private clinical melanoma dataset.
+
+---
+
+# Reproducibility
+
+The repository contains the training and evaluation scripts used for the experiments together with the recorded results.
+
+```text
 code/
-  baseline_nuclei_segmentation.py       # local baseline U-Net training
-  kaggle_baseline_nuclei_segmentation.py # Kaggle-adapted version (used for all results here)
-  mean_teacher_ssl.py                    # Mean Teacher SSL implementation (in-domain unlabeled data)
-  mean_teacher_tcga.py                   # Mean Teacher SSL using real TCGA out-of-domain unlabeled data
-  gan_ssl.py                             # semi-supervised GAN (Hung et al. 2018 style)
-  pseudo_labeling_ssl.py                 # confidence-thresholded pseudo-labeling / self-training
-  supervised_only_comparison.py          # fair supervised-only baseline for comparison
-  autoencoder_pretrain_ssl.py            # autoencoder pretraining + fine-tune (single lr)
-  autoencoder_diff_lr.py                 # autoencoder pretraining + fine-tune (differential lr)
-  tcga_download.py                       # download TCGA-SKCM slides via GDC API
-  tcga_patch_extraction.py               # extract tissue patches from those slides
-  augmented_dataset.py                   # data augmentation (flips, rotation, color jitter)
-  baseline_full_augmented.py             # full baseline retrained with augmentation
-  tta_evaluation.py                      # test-time augmentation evaluation
-  full_metrics_evaluation.py             # Dice/IoU/Precision/Recall/Pixel Accuracy
+├── baseline_nuclei_segmentation.py
+├── kaggle_baseline_nuclei_segmentation.py
+├── baseline_full_augmented.py
+├── supervised_only_comparison.py
+├── mean_teacher_ssl.py
+├── mean_teacher_tcga.py
+├── gan_ssl.py
+├── pseudo_labeling_ssl.py
+├── autoencoder_pretrain_ssl.py
+├── autoencoder_diff_lr.py
+├── augmented_dataset.py
+├── tta_evaluation.py
+├── full_metrics_evaluation.py
+├── tcga_download.py
+└── tcga_patch_extraction.py
+
 results/
-  01_baseline_full_supervised.txt
-  02_scarce_label_comparison_15.txt
-  03_scarce_label_comparison_40.txt
-  04_full_metrics.txt
-  05_augmentation_and_tta.txt
-  06_mean_teacher_tcga_out_of_domain.txt
-  07_mean_teacher_indomain_stronger_aug.txt
-  08_gan_ssl.txt
-  09_pseudo_labeling.txt
+├── 01_baseline_full_supervised.txt
+├── 02_scarce_label_comparison_15.txt
+├── 03_scarce_label_comparison_40.txt
+├── 04_full_metrics.txt
+├── 05_augmentation_and_tta.txt
+├── 06_mean_teacher_tcga_out_of_domain.txt
+├── 07_mean_teacher_indomain_stronger_aug.txt
+├── 08_gan_ssl.txt
+└── 09_pseudo_labeling.txt
 ```
 
-## Reproducing
+Install dependencies with:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Download PUMA from the Zenodo link above, arrange as `images/` (.tif) and `annotations/` (.geojson) with matching filename stems (annotations have a `_nuclei` suffix). For the TCGA extension, run `tcga_download.py` then `tcga_patch_extraction.py` (requires `openslide-tools` / `openslide-python`). Then run the remaining scripts in `code/` — each is self-contained given the shared dataset/model/loss definitions established in the baseline script.
+Download the PUMA dataset from the official sources and arrange the images and annotations according to the expected directory structure.
+
+For the TCGA extension:
+
+```bash
+python code/tcga_download.py
+python code/tcga_patch_extraction.py
+```
+
+The remaining scripts contain the individual training and evaluation procedures used in the experiments.
+
+---
+
+# Related Work
+
+* **Akbarpour et al. (2025)** — *Deep Learning-Based Nuclei Segmentation and Melanoma Detection...*; primary reference motivating the nuclei-segmentation approach.
+* **Alheejawi et al. (2021)** — foundational work connecting nuclei segmentation with melanoma-region analysis.
+* **Yu et al. (2021)** — semi-supervised learning using Mean Teacher-style consistency regularization.
+* **Hung et al. (2018)** — adversarial learning for semi-supervised semantic segmentation.
+* **Requa et al. (2023)** — supervised/semi-supervised approaches for skin neoplasm detection.
+
+---
+
+## Research Direction
+
+This project serves as a methodological investigation into **label-efficient learning for melanoma histopathology**.
+
+The results motivate future work toward models that can better exploit large quantities of heterogeneous, unlabeled histopathological data while remaining robust to differences in staining, acquisition, magnification, and clinical domain.
+
+The central objective is not simply to obtain a higher benchmark score, but to understand **how unlabeled medical images can be converted into reliable learning signal under realistic annotation constraints**.
