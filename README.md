@@ -74,6 +74,12 @@ An additional out-of-domain experiment uses **TCGA-SKCM** whole-slide images. Ei
 
 These results suggest that the effectiveness of SSL depends strongly on the **learning mechanism, label availability, augmentation strategy, and domain of the unlabeled data**.
 
+## TCGA-SKCM classification baseline (second dataset)
+
+At the supervisor's request, a simple baseline model was also built on a second dataset (TCGA-SKCM) to demonstrate the pipeline generalizes beyond PUMA. Since TCGA patches have no nuclei masks, a patch-level classification task was used instead — primary vs. metastatic melanoma tissue — with labels taken directly from each slide's TCGA barcode (no manual annotation needed).
+
+A ResNet18 classifier was trained and evaluated with a properly stratified slide-level split (both classes represented in validation). Across 8 slides and later 30 slides (15 primary, 15 metastatic), with and without augmentation, validation accuracy consistently stayed near chance level (~50-56%) for this balanced binary task, rather than improving. This is treated as a genuine, diagnosed negative result rather than a bug: with a small slide count, the model most likely learns slide-specific staining/scanner characteristics instead of generalizable biological signal, and primary vs. metastatic melanoma are known to be structurally similar in whole-slide histology at the patch level. Full detail and all four attempts are logged in `results/10_tcga_classification_baseline.txt`.
+
 ## Repository Structure
 
 ```text
@@ -92,10 +98,20 @@ code/
 ├── tta_evaluation.py
 ├── full_metrics_evaluation.py
 ├── tcga_download.py
-└── tcga_patch_extraction.py
+├── tcga_patch_extraction.py
+└── tcga_classification_baseline.py
 
 results/
-└── experiment logs (.txt)
+├── 01_baseline_full_supervised.txt
+├── 02_scarce_label_comparison_15.txt
+├── 03_scarce_label_comparison_40.txt
+├── 04_full_metrics.txt
+├── 05_augmentation_and_tta.txt
+├── 06_mean_teacher_tcga_out_of_domain.txt
+├── 07_mean_teacher_indomain_stronger_aug.txt
+├── 08_gan_ssl.txt
+├── 09_pseudo_labeling.txt
+└── 10_tcga_classification_baseline.txt
 ```
 
 ## Reproducibility
