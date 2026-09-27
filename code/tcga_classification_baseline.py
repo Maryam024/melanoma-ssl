@@ -1,7 +1,6 @@
 import json
 import os
 import re
-
 import numpy as np
 import openslide
 import requests
@@ -45,7 +44,6 @@ def extract_patches(svs_path, n_patches):
     slide.close()
     return saved
 
-
 def download_and_process(sample_type, n_slides):
     filters = {
         "op": "and",
@@ -78,7 +76,6 @@ def download_and_process(sample_type, n_slides):
         print(f"  {name}: extracted {n_saved} patches")
         os.remove(out_path)  # keep disk usage low; only patches are kept
 
-
 def get_sample_type(filename):
     match = re.search(r"TCGA-\w+-\w+-(\d{2})", filename)
     if not match:
@@ -104,7 +101,6 @@ class TCGAClassificationDataset(Dataset):
         fname, label = self.data[idx]
         img = Image.open(os.path.join(self.patch_dir, fname)).convert("RGB")
         return self.transform(img), label
-
 
 def main():
     download_and_process("Primary Tumor", SLIDES_PER_CLASS)
@@ -200,7 +196,6 @@ def main():
     print(f"\nBest TCGA baseline (primary vs. metastatic) val_acc: {best_acc:.4f}")
     print("Confusion matrix at best epoch (rows=true, cols=predicted):")
     print(confusion_matrix(best_labels, best_preds))
-
 
 if __name__ == "__main__":
     main()
