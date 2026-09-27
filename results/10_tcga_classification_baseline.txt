@@ -1,0 +1,53 @@
+Experiment: Simple baseline model on the second (TCGA-SKCM) dataset, as requested by supervisor.
+Task: primary vs. metastatic melanoma tissue classification at the patch level.
+Rationale: TCGA-SKCM patches have no nuclei masks (unlike PUMA), so segmentation was not
+possible here. Sample-type labels already encoded in each slide's TCGA barcode (01 = primary,
+06 = metastatic) were used instead, requiring no manual annotation.
+Model: ResNet18 (ImageNet-pretrained), binary classification head.
+
+=== Attempt 1: 8 slides (3 primary, 5 metastatic), random 1-slide holdout ===
+Result: best val_acc = 0.7750 -- INVALID. The held-out slide happened to be 100% primary,
+so the validation set contained zero metastatic examples. Confusion matrix confirmed this
+(second row entirely zero). Number discarded.
+
+=== Attempt 2: 8 slides, stratified split (1 primary + 1 metastatic held out) ===
+Val patches: 40 primary / 40 metastatic (balanced).
+Result: best val_acc = 0.5250. Confusion matrix: [[0 40],[0 40]] -- model predicted the
+majority training class for every validation patch. No real discrimination learned.
+
+=== Attempt 3: 8 slides, same split, with train-time augmentation added ===
+(flip, color jitter) to reduce reliance on slide-specific staining.
+Result: best val_acc = 0.5375, still collapsed to one-class prediction on the confusion
+matrix. Augmentation did not change the outcome.
+
+=== Attempt 4 (final): 30 slides (15 primary, 15 metastatic), stratified split ===
+6 slides held out (2 val slides originally at 8-slide scale insufficient; scaled up).
+Train patches: 960 | Val patches: 240 (120 primary / 120 metastatic, balanced).
+
+Epoch 1/20  | val_acc=0.5250
+Epoch 7/20  | val_acc=0.5583  <- best
+Epoch 10/20 | val_acc=0.3833
+Epoch 15/20 | val_acc=0.3750
+Epoch 20/20 | val_acc=0.4958
+
+Best val_acc: 0.5583
+Confusion matrix at best epoch: [[40 80],[26 94]]
+
+RESULT: Predictions are no longer collapsed to a single class (unlike attempts 2-3), but
+val_acc fluctuates near chance level (0.50 for a balanced binary task) throughout all 20
+epochs with no stable upward trend. Training loss dropped smoothly and normally throughout,
+indicating the model fits the training slides fine but does not generalize to held-out slides.
+
+DIAGNOSIS: With only 30 total slides, the model most likely learns slide-specific staining
+and scanner characteristics rather than a generalizable biological signal. This is a known
+challenge in digital pathology with small slide counts. There is also a plausible biological
+explanation: primary and metastatic melanoma are the same cell type, and prior work has noted
+structural similarity between primary and metastatic tumors in whole-slide histology, so a
+single small patch may not carry a reliably distinguishing signal without broader anatomical
+or slide-level context.
+
+CONCLUSION: This is reported as the baseline result for the TCGA-SKCM dataset. Further
+tuning was not pursued past this point, since two independent fixes (stratified split,
+augmentation) and a 4x increase in slide count did not change the qualitative outcome.
+Likely requires substantially more slides (tens to hundreds per class) than were available
+in this scope to succeed.
